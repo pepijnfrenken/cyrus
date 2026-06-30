@@ -1,7 +1,7 @@
 //! Durable repo state: event log, notes, capsules, approvals, path leases, and
 //! the session->agent attribution map. Plus the auto-compaction capsule builder.
 //!
-//!         (+ types.ts: ToolEvent, ApprovalRequest, Capsule, PathLease, MemoryNote)
+//! (+ types.ts: ToolEvent, ApprovalRequest, Capsule, PathLease, MemoryNote)
 //!
 //! Behavioral fidelity notes:
 //!   - The TS serializes ALL state mutations + file I/O through an in-process
