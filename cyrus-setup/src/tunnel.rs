@@ -325,6 +325,11 @@ async fn cloudflared_quick(opts: &SetupOptions) -> anyhow::Result<TunnelOutcome>
     let exe = find_cloudflared_exe().context(
         "cloudflared not found — install it (winget install Cloudflare.cloudflared) and re-run",
     )?;
+    // Kill a quick tunnel left by a prior run BEFORE spawning a new one. Without
+    // this, every re-run orphans its cloudflared and they pile up — multiple
+    // tunnels compete, and a stale one (pointing at an old chimera port) can be
+    // the one still answering, so the connector verifies a URL that never routes.
+    crate::stack::kill_quick_tunnel(opts);
     let log = opts.cyrus_home().join("logs/cloudflared-quick.log");
 
     // Isolate from any existing `~/.cloudflared/config.yml`. If the user already

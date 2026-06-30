@@ -235,7 +235,7 @@ pub fn stop_servers(opts: &SetupOptions) {
 /// recorded at spawn, guarded against pid-reuse by confirming the image is still
 /// cloudflared. No pid file (or a named tunnel) -> no-op.
 #[cfg(windows)]
-fn kill_quick_tunnel(opts: &SetupOptions) {
+pub(crate) fn kill_quick_tunnel(opts: &SetupOptions) {
     let pid_file = opts.cyrus_home().join("quick-tunnel.pid");
     let Ok(s) = std::fs::read_to_string(&pid_file) else {
         return;
@@ -260,7 +260,7 @@ fn kill_quick_tunnel(opts: &SetupOptions) {
 }
 
 #[cfg(not(windows))]
-fn kill_quick_tunnel(opts: &SetupOptions) {
+pub(crate) fn kill_quick_tunnel(opts: &SetupOptions) {
     let pid_file = opts.cyrus_home().join("quick-tunnel.pid");
     let Ok(s) = std::fs::read_to_string(&pid_file) else {
         return;
