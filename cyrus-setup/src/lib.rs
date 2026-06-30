@@ -43,6 +43,16 @@ pub const DEFAULT_CHIMERA_PORT: u16 = 8787;
 pub const DEFAULT_SHIM_PORT: u16 = 8765;
 pub const DEFAULT_CDP_PORT: u16 = 9222;
 
+/// Read a `u16` port from `var`, falling back to `default` when unset, empty, or
+/// unparseable (a bogus value shouldn't silently land on port 0).
+fn env_port(var: &str, default: u16) -> u16 {
+    std::env::var(var)
+        .ok()
+        .and_then(|s| s.trim().parse::<u16>().ok())
+        .filter(|&p| p != 0)
+        .unwrap_or(default)
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Step {
     Secrets,
@@ -212,10 +222,17 @@ impl SetupOptions {
         SetupOptions {
             repo_root: repo_root.into(),
             bin_dir: None,
-            chimera_port: DEFAULT_CHIMERA_PORT,
-            shim_port: DEFAULT_SHIM_PORT,
+            // Ports are read from the environment so EVERY entry point agrees:
+            // `cyrus setup`, `cyrus check`, AND the bare-`cyrus` codex launch all
+            // build options through here, and the launch path uses these ports to
+            // point codex at lipsync + to repair/tear down chimera. A flag on
+            // `setup` alone would desync the launch path, so the env var is the
+            // load-bearing override (the `--chimera-port`/`--shim-port` flags just
+            // set it for the current process).
+            chimera_port: env_port("CYRUS_CHIMERA_PORT", DEFAULT_CHIMERA_PORT),
+            shim_port: env_port("CYRUS_SHIM_PORT", DEFAULT_SHIM_PORT),
             cdp_host: "127.0.0.1".to_string(),
-            cdp_port: DEFAULT_CDP_PORT,
+            cdp_port: env_port("CYRUS_CDP_PORT", DEFAULT_CDP_PORT),
             model: "gpt-5-5-thinking".to_string(),
             effort: "max".to_string(),
             connector_name: "repo".to_string(),

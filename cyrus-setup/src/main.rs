@@ -74,6 +74,20 @@ fn parse_args() -> Cli {
             },
             // Optional reserved ngrok domain for `--tunnel ngrok`.
             "--ngrok-domain" => ngrok_domain = args.next().filter(|s| !s.is_empty()),
+            // Port overrides. Set the env var rather than only the local opts so
+            // the SAME port reaches the bare-`cyrus` launch path (which rebuilds
+            // SetupOptions from the env to point codex at lipsync + repair the
+            // stack). Equivalent to exporting CYRUS_CHIMERA_PORT / CYRUS_SHIM_PORT.
+            "--chimera-port" => {
+                if let Some(v) = args.next() {
+                    std::env::set_var("CYRUS_CHIMERA_PORT", v);
+                }
+            }
+            "--shim-port" => {
+                if let Some(v) = args.next() {
+                    std::env::set_var("CYRUS_SHIM_PORT", v);
+                }
+            }
             other => {
                 eprintln!("unknown arg: {other}");
                 std::process::exit(2);
