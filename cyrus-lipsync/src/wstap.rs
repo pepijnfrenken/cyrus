@@ -173,6 +173,20 @@ fn handle_binding(state: &Mutex<TapState>, on_event: &OnEvent, params: &Value) {
         Some(p) => p,
         None => return,
     };
+    // Diagnostics (RUST_LOG=debug): the fetch-wrapper reports the turn-body
+    // shape through the same binding with a sentinel prefix. Surface it and stop
+    // — it must never reach the SSE parser.
+    if let Some(diag) = payload.strip_prefix("__cyrusdiag:") {
+        tracing::debug!("[shim] tap/fetch-wrapper {diag}");
+        return;
+    }
+    // Diagnostics (RUST_LOG=debug): the inline-SSE tee fired — log a truncated
+    // payload so we can confirm whether fresh-tab turns stream here (and what
+    // the delta shape looks like) vs vanishing onto the shared-worker socket.
+    tracing::debug!(
+        "[shim] tap/sse payload[0..200]={}",
+        payload.chars().take(200).collect::<String>()
+    );
     // feed the inline-SSE parser; swallow any error.
     let events = {
         let mut s = state.lock().expect("WsTap state mutex poisoned");
@@ -218,7 +232,13 @@ fn handle_frame(state: &Mutex<TapState>, on_event: &OnEvent, params: &Value) {
             Some(i) => i,
             None => continue,
         };
-        if inner.get("type").and_then(Value::as_str) != Some("stream-item") {
+        // Diagnostics (RUST_LOG=debug): name every WS frame's inner type so we
+        // can tell whether token deltas reach the tap at all, or whether the
+        // stream went to the CDP-invisible shared-worker socket (only metadata
+        // frames arriving here).
+        let inner_type = inner.get("type").and_then(|v| v.as_str());
+        tracing::debug!("[shim] tap/ws frame inner.type={inner_type:?}");
+        if inner_type != Some("stream-item") {
             continue;
         }
         let enc = match inner.get("encoded_item").and_then(Value::as_str) {

@@ -350,6 +350,16 @@ pub(crate) const FETCH_WRAPPER_JS: &str = r#"
             // separately because it may also disable the connector (temp-chat behavior).
             if (ov.no_history) { b.history_and_training_disabled = true; changed = true; }
           }
+          // Diagnostics: report the turn-body shape so the harness can see why a
+          // turn streamed 0 chars. Routed through __shadowStream with a sentinel
+          // prefix the tap intercepts (RUST_LOG=debug surfaces it).
+          try {
+            if (window.__shadowStream) {
+              window.__shadowStream("__cyrusdiag:body keys=[" + Object.keys(b).join(",")
+                + "] supports_buffering=" + JSON.stringify(b.supports_buffering)
+                + " changed=" + changed + " hasOverrides=" + (!!ov));
+            }
+          } catch (e) {}
           if (changed) init = Object.assign({}, init, { body: JSON.stringify(b) });
         } catch (e) {}
       }
