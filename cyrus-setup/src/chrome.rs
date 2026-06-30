@@ -83,7 +83,34 @@ fn find_chrome_exe() -> Option<PathBuf> {
     None
 }
 
+/// Carbonyl (a terminal-rendering Chromium, github.com/jmagly/carbonyl) speaks
+/// standard CDP on `--remote-debugging-port` just like Chrome, so it's a drop-in
+/// alternate browser — CDP stays the one interface. `CYRUS_CARBONYL_EXE` wins,
+/// else bare `carbonyl` on PATH.
+fn find_carbonyl_exe() -> Option<PathBuf> {
+    if let Ok(p) = std::env::var("CYRUS_CARBONYL_EXE") {
+        let p = PathBuf::from(p);
+        if p.exists() {
+            return Some(p);
+        }
+    }
+    // PATH lookup: spawnable bare name?
+    let probe = std::process::Command::new("carbonyl")
+        .arg("--version")
+        .stdout(std::process::Stdio::null())
+        .stderr(std::process::Stdio::null())
+        .status();
+    if probe.map(|s| s.success()).unwrap_or(false) {
+        return Some(PathBuf::from("carbonyl"));
+    }
+    None
+}
+
 fn launch_chrome(opts: &SetupOptions) -> anyhow::Result<()> {
+    // CYRUS_BROWSER picks the engine; both drive over CDP. Default is Chrome.
+    if std::env::var("CYRUS_BROWSER").as_deref() == Ok("carbonyl") {
+        return launch_carbonyl(opts);
+    }
     let exe = find_chrome_exe()
         .context("Chrome not found — install Google Chrome or set CYRUS_CHROME_EXE")?;
     let profile = opts.cyrus_home().join("chrome-profile");
@@ -102,6 +129,41 @@ fn launch_chrome(opts: &SetupOptions) -> anyhow::Result<()> {
         cmd.creation_flags(0x0000_0200);
     }
     cmd.spawn().context("spawn chrome")?;
+    Ok(())
+}
+
+/// Launch Carbonyl with the SAME CDP flag set as Chrome. Two differences that
+/// matter: (1) Carbonyl renders to the TTY, so its stdout/stderr MUST be
+/// redirected to a log or it garbles the setup UI; (2) a SEPARATE profile dir,
+/// since Carbonyl's bundled Chromium revision differs from system Chrome and the
+/// two shouldn't share a `--user-data-dir`.
+fn launch_carbonyl(opts: &SetupOptions) -> anyhow::Result<()> {
+    let exe = find_carbonyl_exe().context(
+        "carbonyl not found — install it (github.com/jmagly/carbonyl) or set CYRUS_CARBONYL_EXE",
+    )?;
+    let profile = opts.cyrus_home().join("carbonyl-profile");
+    std::fs::create_dir_all(&profile).ok();
+    let log_dir = opts.cyrus_home().join("logs");
+    std::fs::create_dir_all(&log_dir).ok();
+    let log = std::fs::File::create(log_dir.join("carbonyl.log"))
+        .context("create carbonyl.log")?;
+    let log_err = log.try_clone().context("clone carbonyl log handle")?;
+
+    let mut cmd = std::process::Command::new(exe);
+    cmd.arg(format!("--remote-debugging-port={}", opts.cdp_port))
+        .arg(format!("--user-data-dir={}", profile.display()))
+        .arg("--no-first-run")
+        .arg("--no-default-browser-check")
+        .arg("https://chatgpt.com/")
+        // Critical: keep Carbonyl's terminal rendering off our stdio.
+        .stdout(std::process::Stdio::from(log))
+        .stderr(std::process::Stdio::from(log_err));
+    #[cfg(windows)]
+    {
+        use std::os::windows::process::CommandExt;
+        cmd.creation_flags(0x0000_0200);
+    }
+    cmd.spawn().context("spawn carbonyl")?;
     Ok(())
 }
 
