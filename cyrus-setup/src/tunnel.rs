@@ -343,6 +343,14 @@ async fn cloudflared_quick(opts: &SetupOptions) -> anyhow::Result<TunnelOutcome>
     let mut cmd = std::process::Command::new(exe);
     cmd.arg("tunnel")
         .arg("--no-autoupdate")
+        // Force HTTP/2 (TCP) transport instead of cloudflared's QUIC default.
+        // Many networks block or mangle QUIC (UDP/443), which leaves the tunnel
+        // looping on `CRYPTO_ERROR ... tls: no application protocol` and never
+        // routing to the origin — the "tunnel does not reach chimera" failure.
+        // HTTP/2 rides ordinary TCP/443 and sails through. Override with
+        // CYRUS_CF_PROTOCOL (e.g. `quic`, `auto`) if a network prefers QUIC.
+        .arg("--protocol")
+        .arg(std::env::var("CYRUS_CF_PROTOCOL").unwrap_or_else(|_| "http2".to_string()))
         .arg("--config")
         .arg(&empty_cfg)
         .arg("--url")
