@@ -817,10 +817,14 @@ impl ThreadConductor {
         *self.applied_model.lock().await = Some(desired_model.clone());
         *self.applied_effort.lock().await = desired_effort.clone();
         tracing::info!(
-            "[shim] thread={} turn model={} effort={} (codex body.model/reasoning.effort)",
+            "[shim] thread={} turn model={} effort={} temp_chat={} (codex body.model/reasoning.effort)",
             self.thread_id(),
             desired_model,
-            desired_effort.as_deref().unwrap_or("default")
+            desired_effort.as_deref().unwrap_or("default"),
+            // temp_chat=true means this turn ran with history_and_training_disabled
+            // (SHIM_NO_HISTORY / headless). Logged so a temp-chat trial can be
+            // correlated with whether the repo connector tools still resolve.
+            no_hist,
         );
     }
 
