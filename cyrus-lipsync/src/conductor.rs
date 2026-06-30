@@ -1444,7 +1444,13 @@ final answer with no tool block if the task is complete.",
         let stall =
             explicit_stall_secs(std::env::var("SHIM_TURN_STALL_SECS").ok().as_deref())
                 .map(Duration::from_secs);
-        let poll = Duration::from_secs(15);
+        // Watchdog cadence: poll every 15s, but never coarser than the stall
+        // budget — otherwise a short opt-in `SHIM_TURN_STALL_SECS` could never
+        // fire before the next poll tick.
+        let poll = match stall {
+            Some(cap) => Duration::from_secs(15).min(cap),
+            None => Duration::from_secs(15),
+        };
         let mut silent = Duration::ZERO;
         let result: anyhow::Result<()> = async {
             loop {
@@ -1581,7 +1587,8 @@ final answer with no tool block if the task is complete.",
                                     let _ = chat.stop().await;
                                 }
                                 return Err(anyhow::anyhow!(
-                                    "no ChatGPT output for {}s (SHIM_TURN_STALL_SECS) — turn aborted, retry shortly",
+                                    "ChatGPT produced no output for {}s (no token stream and no \
+connector-tool activity, SHIM_TURN_STALL_SECS) — likely rate-limited or stalled; turn aborted, retry shortly",
                                     silent.as_secs()
                                 ));
                             }
